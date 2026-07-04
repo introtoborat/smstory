@@ -42,6 +42,7 @@ export async function POST(
         pages: {
           create: original.pages.map((p) => ({
             pageNumber: p.pageNumber,
+            title: p.title ?? `Page ${p.pageNumber}`,
             sceneDescription: p.sceneDescription,
             storyText: p.storyText,
             imagePrompt: p.imagePrompt,

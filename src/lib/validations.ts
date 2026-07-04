@@ -13,6 +13,7 @@ export const storyCreateSchema = z.object({
 export const storyUpdateSchema = storyCreateSchema.partial();
 
 export const pageCreateSchema = z.object({
+  title: z.string().max(200).optional(),
   pageNumber: z.number().int().min(1),
   sceneDescription: z.string().max(2000).optional(),
   storyText: z.string().min(1, "Story text is required"),
@@ -30,6 +31,14 @@ export const pageReorderSchema = z.object({
     })
   ),
 });
+
+export const pageNameSuggestionCreateSchema = z.object({
+  name: z.string().min(1, "Name is required").max(200),
+  order: z.number().int().optional(),
+  enabled: z.boolean().optional(),
+});
+
+export const pageNameSuggestionUpdateSchema = pageNameSuggestionCreateSchema.partial();
 
 export const storySearchSchema = z.object({
   query: z.string().optional(),

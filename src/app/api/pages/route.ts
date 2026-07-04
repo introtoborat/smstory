@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
     const page = await prisma.storyPage.create({
       data: {
         storyId: body.storyId,
+        title: parsed.data.title?.trim() || `Page ${parsed.data.pageNumber}`,
         pageNumber: parsed.data.pageNumber,
         sceneDescription: parsed.data.sceneDescription,
         storyText: parsed.data.storyText,

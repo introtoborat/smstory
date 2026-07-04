@@ -11,7 +11,11 @@ import { defineConfig, env } from "prisma/config";
 // is not set.
 const databaseUrl = (() => {
   try {
-    return env("DATABASE_URL");
+    const url = env("DATABASE_URL");
+    if (url.includes("sslmode=") || url.includes("ssl=")) {
+      return url;
+    }
+    return url.includes("?") ? `${url}&sslmode=no-verify` : `${url}?sslmode=no-verify`;
   } catch {
     // generate-only path — placeholder URL, never used for real connections
     return "postgresql://placeholder:placeholder@localhost:5432/postgres";

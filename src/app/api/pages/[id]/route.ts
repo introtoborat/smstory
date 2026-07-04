@@ -41,9 +41,14 @@ export async function PATCH(
     const existing = await prisma.storyPage.findUnique({ where: { id } });
     if (!existing) return notFound("Page not found");
 
+    const updateData = { ...parsed.data };
+    if (updateData.title !== undefined) {
+      updateData.title = updateData.title.trim() || `Page ${existing.pageNumber}`;
+    }
+
     const page = await prisma.storyPage.update({
       where: { id },
-      data: parsed.data,
+      data: updateData,
     });
 
     return success(page);

@@ -529,6 +529,233 @@ function LookupTab({
 }
 
 // =================================================================
+// Page Name Suggestions tab
+// =================================================================
+function PageNameSuggestionsTab() {
+  const [items, setItems] = useState<{ id: string; name: string; order: number; enabled: boolean }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newName, setNewName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const fetchItems = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/settings/page-name-suggestions");
+      const data = await res.json();
+      if (res.ok) setItems(data.suggestions || []);
+    } catch {
+      toast.error("Failed to load suggestions");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchItems(); }, [fetchItems]);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim()) return;
+    setCreating(true);
+    try {
+      const res = await apiFetch("/api/settings/page-name-suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Failed to create suggestion");
+        return;
+      }
+      toast.success("Suggestion added");
+      setNewName("");
+      fetchItems();
+    } catch {
+      toast.error("Connection error");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const startEdit = (it: any) => {
+    setEditingId(it.id);
+    setEditName(it.name);
+  };
+
+  const saveEdit = async (id: string) => {
+    try {
+      const res = await apiFetch(`/api/settings/page-name-suggestions/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Failed to update");
+        return;
+      }
+      toast.success("Updated");
+      setEditingId(null);
+      fetchItems();
+    } catch {
+      toast.error("Connection error");
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    try {
+      const res = await apiFetch(`/api/settings/page-name-suggestions/${deleteId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Failed to delete");
+        return;
+      }
+      toast.success("Deleted");
+      fetchItems();
+    } catch {
+      toast.error("Connection error");
+    } finally {
+      setDeleteId(null);
+    }
+  };
+
+  const toggleEnabled = async (id: string, enabled: boolean) => {
+    try {
+      await apiFetch(`/api/settings/page-name-suggestions/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: !enabled }),
+      });
+      fetchItems();
+    } catch {
+      toast.error("Connection error");
+    }
+  };
+
+  const move = async (index: number, dir: "up" | "down") => {
+    const next = [...items];
+    const newIndex = dir === "up" ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= items.length) return;
+    const a = next[index];
+    const b = next[newIndex];
+    // swap orders
+    try {
+      await apiFetch(`/api/settings/page-name-suggestions/${a.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order: b.order }),
+      });
+      await apiFetch(`/api/settings/page-name-suggestions/${b.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order: a.order }),
+      });
+      fetchItems();
+    } catch {
+      toast.error("Connection error");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Plus className="h-4 w-4 text-primary" />
+            Add suggestion
+          </CardTitle>
+          <CardDescription>Displayed to users as page title suggestions when editing pages.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleCreate} className="flex gap-2">
+            <Input placeholder="e.g. Cover Page" value={newName} onChange={(e) => setNewName(e.target.value)} className="h-10 flex-1" />
+            <Button type="submit" variant="gradient" disabled={creating || !newName.trim()} className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              Add
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Existing suggestions ({items.length})</CardTitle>
+          <CardDescription>Enable, disable, reorder, edit, or remove suggestions.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : items.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">None yet. Add your first one above.</div>
+          ) : (
+            <div className="divide-y divide-border/60">
+              {items.map((it, idx) => (
+                <div key={it.id} className="flex items-center gap-3 py-3 group">
+                  {editingId === it.id ? (
+                    <>
+                      <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-9 flex-1" autoFocus />
+                      <Button size="sm" variant="gradient" onClick={() => saveEdit(it.id)} className="gap-1">
+                        <Check className="h-3.5 w-3.5" /> Save
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingId(null)} className="gap-1">
+                        <X className="h-3.5 w-3.5" /> Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Badge variant="secondary" className="font-medium">#{it.order}</Badge>
+                      <span className="flex-1 font-medium truncate">{it.name}</span>
+                      <div className="flex items-center gap-1">
+                        <Button size="icon-sm" variant="ghost" onClick={() => move(idx, "up")} title="Move up">
+                          <ArrowUpDown className="h-4 w-4 rotate-90" />
+                        </Button>
+                        <Button size="icon-sm" variant="ghost" onClick={() => move(idx, "down")} title="Move down">
+                          <ArrowUpDown className="h-4 w-4 -rotate-90" />
+                        </Button>
+                        <Button size="icon-sm" variant="ghost" onClick={() => startEdit(it)} title="Edit">
+                          <Edit3 className="h-4 w-4" />
+                        </Button>
+                        <Button size="icon-sm" variant="ghost" onClick={() => setDeleteId(it.id)} title="Delete" className="text-destructive hover:text-destructive">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" variant={it.enabled ? "secondary" : "outline"} onClick={() => toggleEnabled(it.id, it.enabled)}>
+                          {it.enabled ? "Enabled" : "Disabled"}
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this suggestion?</AlertDialogTitle>
+            <AlertDialogDescription>Suggestions in use by stories can be removed safely.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+// =================================================================
 // Page
 // =================================================================
 export default function SettingsPage() {
@@ -546,7 +773,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="genres" className="animate-fade-up [animation-delay:60ms]">
-        <TabsList className="grid w-full max-w-md grid-cols-3 h-11 p-1">
+        <TabsList className="grid w-full max-w-md grid-cols-4 h-11 p-1">
           <TabsTrigger value="genres" className="gap-1.5 data-[state=active]:shadow-soft">
             <Palette className="h-3.5 w-3.5" />
             Genres
@@ -558,6 +785,10 @@ export default function SettingsPage() {
           <TabsTrigger value="genders" className="gap-1.5 data-[state=active]:shadow-soft">
             <Sparkles className="h-3.5 w-3.5" />
             Genders
+          </TabsTrigger>
+          <TabsTrigger value="page-names" className="gap-1.5 data-[state=active]:shadow-soft">
+            <Sparkles className="h-3.5 w-3.5" />
+            Page Names
           </TabsTrigger>
         </TabsList>
 
@@ -582,6 +813,9 @@ export default function SettingsPage() {
               icon={Sparkles}
               emptyHint="e.g. Male, Female, Non-binary…"
             />
+          </TabsContent>
+          <TabsContent value="page-names" className="mt-0">
+            <PageNameSuggestionsTab />
           </TabsContent>
         </div>
       </Tabs>

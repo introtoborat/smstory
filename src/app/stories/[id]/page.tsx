@@ -27,6 +27,7 @@ import { apiFetch } from "@/lib/csrf-client";
 interface StoryPage {
   id: string;
   pageNumber: number;
+  title: string;
   sceneDescription: string | null;
   storyText: string;
   imagePrompt: string | null;
@@ -81,7 +82,18 @@ export default function StoryViewPage({ params }: { params: Promise<{ id: string
   }, [id, router]);
 
   const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
+    // If the input contains HTML, extract the plain text content so clipboard
+    // receives only human-readable text (no tags).
+    let plain = text;
+    try {
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = text;
+      plain = wrapper.textContent || wrapper.innerText || text;
+    } catch {
+      plain = text;
+    }
+
+    navigator.clipboard.writeText(plain);
     toast.success(`${label} copied to clipboard`);
   };
 
@@ -288,7 +300,7 @@ export default function StoryViewPage({ params }: { params: Promise<{ id: string
               <Card key={page.id} className="overflow-hidden">
                 <CardHeader className="bg-muted/30 pb-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">Page {page.pageNumber}</CardTitle>
+                    <CardTitle className="text-lg">{page.title}</CardTitle>
                     <Button
                       variant="ghost"
                       size="sm"

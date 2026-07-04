@@ -30,6 +30,7 @@ interface Lookup { id: string; name: string; color?: string; order: number }
 
 interface PageData {
   id?: string;
+  title?: string;
   pageNumber: number;
   sceneDescription: string;
   storyText: string;
@@ -57,6 +58,7 @@ export function StoryEditor({ storyId }: StoryEditorProps) {
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [pages, setPages] = useState<PageData[]>([]);
+  const [pageNameSuggestions, setPageNameSuggestions] = useState<string[]>([]);
   const [autoSaveStatus, setAutoSaveStatus] = useState<string>("");
 
   const [ageGroups, setAgeGroups] = useState<Lookup[]>([]);
@@ -89,6 +91,7 @@ export function StoryEditor({ storyId }: StoryEditorProps) {
         setPages(
           data.pages?.map((p: PageData) => ({
             ...p,
+            title: p.title || `Page ${p.pageNumber}`,
             sceneDescription: p.sceneDescription || "",
             imagePrompt: p.imagePrompt || "",
             notes: p.notes || "",
@@ -98,6 +101,16 @@ export function StoryEditor({ storyId }: StoryEditorProps) {
       .catch(() => toast.error("Failed to load story"))
       .finally(() => setLoading(false));
   }, [storyId]);
+
+  // Load page name suggestions for autocomplete
+  useEffect(() => {
+    fetch("/api/settings/page-name-suggestions")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.suggestions) setPageNameSuggestions(data.suggestions.map((s: any) => s.name));
+      })
+      .catch(() => {});
+  }, []);
 
   // Autosave draft
   useEffect(() => {
@@ -118,9 +131,30 @@ export function StoryEditor({ storyId }: StoryEditorProps) {
     return () => clearTimeout(timer);
   }, [title, ageGroup, genre, characterGender, tags, pages, isEdit, storyId]);
 
+  const computeNextPageNumber = () => {
+    if (pages.length === 0) return 1;
+    for (let i = pages.length - 1; i >= 0; i--) {
+      const p = pages[i];
+      const t = (p.title || "").trim();
+      if (!t) {
+        if (typeof p.pageNumber === "number") return p.pageNumber + 1;
+        continue;
+      }
+      const m = t.match(/^Page\s*(\d+)$/i);
+      if (m) {
+        return parseInt(m[1], 10) + 1;
+      }
+      // non-numbered custom title -> numbering restarts at 1
+      return 1;
+    }
+    return pages.length + 1;
+  };
+
   const handleAddPage = () => {
+    const newPageNumber = computeNextPageNumber();
     const newPage: PageData = {
-      pageNumber: pages.length + 1,
+      pageNumber: newPageNumber,
+      title: `Page ${newPageNumber}`,
       sceneDescription: "",
       storyText: "",
       imagePrompt: "",
@@ -132,6 +166,29 @@ export function StoryEditor({ storyId }: StoryEditorProps) {
   };
 
   const updatePage = (index: number, field: keyof PageData, value: string) => {
+    // Special handling when updating title: parse numbered titles to adjust numbering
+    if (field === "title") {
+      const newTitle = value;
+      const m = newTitle.trim().match(/^Page\s*(\d+)$/i);
+      setPages((prev) => {
+        const next = prev.map((p) => ({ ...p }));
+        if (m) {
+          const n = parseInt(m[1], 10);
+          next[index].title = newTitle;
+          next[index].pageNumber = n;
+          // renumber subsequent pages sequentially from n+1
+          for (let j = index + 1; j < next.length; j++) {
+            next[j].pageNumber = n + (j - index);
+          }
+        } else {
+          next[index].title = newTitle;
+        }
+        next[index]._isDirty = true;
+        return next;
+      });
+      return;
+    }
+
     setPages(pages.map((p, i) => (i === index ? { ...p, [field]: value, _isDirty: true } : p)));
   };
 
@@ -277,7 +334,7 @@ export function StoryEditor({ storyId }: StoryEditorProps) {
           await apiFetch("/api/pages", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...page, storyId: savedStoryId }),
+              body: JSON.stringify({ ...page, storyId: savedStoryId }),
           });
         } else if (page._isDirty && page.id) {
           // Update existing page
@@ -285,11 +342,12 @@ export function StoryEditor({ storyId }: StoryEditorProps) {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              sceneDescription: page.sceneDescription,
-              storyText: page.storyText,
-              imagePrompt: page.imagePrompt,
-              notes: page.notes,
-              pageNumber: page.pageNumber,
+                title: page.title,
+                sceneDescription: page.sceneDescription,
+                storyText: page.storyText,
+                imagePrompt: page.imagePrompt,
+                notes: page.notes,
+                pageNumber: page.pageNumber,
             }),
           });
         }
@@ -492,7 +550,23 @@ export function StoryEditor({ storyId }: StoryEditorProps) {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
-                      <CardTitle className="text-base">Page {page.pageNumber}</CardTitle>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id={`page-title-${index}`}
+                          list={`page-suggestions`}
+                          value={page.title ?? ""}
+                          onChange={(e) => updatePage(index, "title", e.target.value)}
+                          placeholder={`Page ${page.pageNumber}`}
+                          className="h-8 w-64"
+                        />
+                        {pageNameSuggestions.length > 0 && (
+                          <datalist id={`page-suggestions`}>
+                            {pageNameSuggestions.map((s) => (
+                              <option key={s} value={s} />
+                            ))}
+                          </datalist>
+                        )}
+                      </div>
                       {page._isNew && (
                         <Badge variant="outline" className="text-xs">New</Badge>
                       )}
