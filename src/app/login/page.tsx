@@ -126,7 +126,7 @@ function LoginForm() {
                       id="login-email"
                       name="email"
                       type="email"
-                      placeholder="admin@storydb.com"
+                      placeholder="you@example.com"
                       required
                       className="h-11"
                     />

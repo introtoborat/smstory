@@ -306,7 +306,10 @@ export default function StoryViewPage({ params }: { params: Promise<{ id: string
                     <div className="text-sm text-muted-foreground mb-1 flex items-center gap-1.5">
                       <FileText className="h-3.5 w-3.5" /> Story Text
                     </div>
-                    <p className="whitespace-pre-wrap leading-relaxed">{page.storyText}</p>
+                    <div
+                      className="leading-relaxed prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: page.storyText }}
+                    />
                   </div>
 
                   {/* Scene Description */}
