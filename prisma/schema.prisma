@@ -1,0 +1,217 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ===== Roles & Permissions =====
+// Roles are stored as strings; lib/auth.ts enforces RBAC.
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String?
+  password      String?        // null until activation completes
+  role          String         @default("viewer") // "admin" | "editor" | "viewer"
+  status        String         @default("pending") // "pending" | "active" | "inactive"
+  lastLoginAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  createdById   String?
+  createdBy     User?          @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  created       User[]         @relation("UserCreatedBy")
+
+  invitations   Invitation[]
+  passwordResets PasswordReset[]
+  auditLogs     AuditLog[]     @relation("AuditActor")
+  sessions      Session[]
+  drafts        Draft[]
+
+  @@index([role])
+  @@index([status])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  userAgent String?
+  ip        String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Invitation {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String   @unique
+  invitedBy  String
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+model PasswordReset {
+  id          String   @id @default(cuid())
+  userId      String
+  token       String   @unique
+  triggeredBy String   // "admin" | "self"
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorId      String?  // null for anonymous/system events
+  actor        User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action       String   // "login" | "logout" | "user.create" | "user.update" | "user.delete" | "user.activate" | "user.deactivate" | "user.role_change" | "password.reset_request" | "password.change" | "story.create" | "story.update" | "story.delete" | ...
+  entity       String?  // "user" | "story" | "page" | "session"
+  entityId     String?
+  targetUserId String?
+  metadata     String?  // JSON-encoded details (never includes passwords)
+  ip           String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([actorId])
+  @@index([targetUserId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model Story {
+  id                String   @id @default(cuid())
+  title             String
+  ageGroupId        String
+  genreId           String
+  characterGenderId String
+  pageCount         Int      @default(0)
+  uploadStatus      String   @default("not_uploaded") // "uploaded" | "not_uploaded"
+  coverImageUrl     String?
+  coverImagePublicId String?
+  createdById       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  pages             StoryPage[]
+  tags              StoryTag[]
+  ageGroupLookup    AgeGroup @relation(fields: [ageGroupId], references: [id], onDelete: Restrict)
+  genreLookup       Genre    @relation(fields: [genreId], references: [id], onDelete: Restrict)
+  characterGenderLookup CharacterGender @relation(fields: [characterGenderId], references: [id], onDelete: Restrict)
+
+  @@index([title])
+  @@index([ageGroupId])
+  @@index([genreId])
+  @@index([characterGenderId])
+  @@index([uploadStatus])
+  @@index([createdAt])
+}
+
+model StoryPage {
+  id              String   @id @default(cuid())
+  storyId         String
+  title           String?  
+  pageNumber      Int
+  sceneDescription String?
+  storyText       String
+  imagePrompt     String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  story           Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, pageNumber])
+  @@index([storyId])
+}
+
+model PageNameSuggestion {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  order     Int      @default(0)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([order])
+}
+
+model Tag {
+  id     String     @id @default(cuid())
+  name   String     @unique
+  color  String     @default("#6366f1")
+  stories StoryTag[]
+}
+
+model StoryTag {
+  storyId String
+  tagId   String
+  story   Story   @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([storyId, tagId])
+}
+
+model Draft {
+  id        String   @id @default(cuid())
+  storyId   String?
+  userId    String
+  data      String   // JSON string
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([storyId])
+  @@index([userId])
+  @@unique([userId, storyId])
+}
+
+// ===== Lookup tables — managed from /admin/settings =====
+
+model Genre {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String   @default("#6366f1")
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  stories   Story[]
+
+  @@index([order])
+}
+
+model AgeGroup {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  stories   Story[]
+
+  @@index([order])
+}
+
+model CharacterGender {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  stories   Story[]
+
+  @@index([order])
+}
