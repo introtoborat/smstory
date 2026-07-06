@@ -37,7 +37,10 @@ export async function GET(request: NextRequest) {
 // POST /api/pages - Create a page
 export async function POST(request: NextRequest) {
   try {
-    const user = await requirePermission("story.create");
+    // Bulk-create (edit) and reorder only need story.update; single-page
+    // creation during new-story flow also needs story.create. Accept either.
+    let user = await requirePermission("story.update");
+    if (!user) user = await requirePermission("story.create");
     if (!user) return forbidden();
 
     const body = await request.json();

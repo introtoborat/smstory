@@ -106,7 +106,7 @@ export async function middleware(request: NextRequest) {
     response.cookies.set("csrf-token", generateCsrfToken(), {
       httpOnly: false,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7,
       path: "/",
     });

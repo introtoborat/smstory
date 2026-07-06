@@ -215,7 +215,7 @@ export function setCsrfCookie(
   res.cookies.set(CSRF_COOKIE, token, {
     httpOnly: false, // client JS needs to read this
     secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    sameSite: "lax",
     maxAge: 60 * 60 * 24 * 7, // 7 days, same as auth token
     path: "/",
   });
