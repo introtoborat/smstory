@@ -41,6 +41,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ url, publicId }, { status: 200 });
   } catch (error) {
     console.error("Upload error:", error);
+    const isTimeout =
+      error instanceof Error &&
+      (error.message.includes("timed out") ||
+        (error as { http_code?: number }).http_code === 499 ||
+        (error as { name?: string }).name === "TimeoutError");
+    if (isTimeout) {
+      return NextResponse.json(
+        { error: "Upload timed out — please try again with a smaller image" },
+        { status: 504 }
+      );
+    }
     return NextResponse.json({ error: "Upload failed" }, { status: 500 });
   }
 }

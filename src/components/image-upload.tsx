@@ -50,7 +50,11 @@ export function ImageUpload({ value, onChange, publicId: _publicId }: ImageUploa
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          toast.error(data.error ?? "Upload failed");
+          if (res.status === 504) {
+            toast.error(data.error ?? "Upload timed out — please try a smaller image or try again");
+          } else {
+            toast.error(data.error ?? "Upload failed");
+          }
           return;
         }
 

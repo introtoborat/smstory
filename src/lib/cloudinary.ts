@@ -5,7 +5,7 @@ cloudinary.config({
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
   secure: true,
-  timeout: 60000, // 60 second timeout for uploads
+  timeout: 120000, // 120 second SDK-level timeout
 });
 
 export { cloudinary };
@@ -15,13 +15,17 @@ export async function uploadStoryImage(
   options?: { publicId?: string; folder?: string }
 ): Promise<{ url: string; publicId: string }> {
   return new Promise((resolve, reject) => {
+    // Manual timeout guard — upload_stream options don't support a timeout field
+    const timeoutId = setTimeout(() => {
+      reject(new Error("Upload timed out after 55 seconds"));
+    }, 55000);
+
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder: options?.folder ?? "story-covers",
         public_id: options?.publicId,
         resource_type: "image",
         allowed_formats: ["jpg", "jpeg", "png", "webp", "gif"],
-        timeout: 55000, // 55s — just under the route's 60s maxDuration
         transformation: [
           { width: 800, height: 600, crop: "limit" },
           { quality: "auto:good" },
@@ -29,6 +33,7 @@ export async function uploadStoryImage(
         ],
       },
       (error, result) => {
+        clearTimeout(timeoutId);
         if (error || !result) {
           reject(error ?? new Error("Upload failed"));
         } else {
